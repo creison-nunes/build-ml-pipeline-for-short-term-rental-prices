@@ -3,7 +3,6 @@
 Performs basic cleaning on the data and saves the results in W&B
 """
 import argparse
-import glob
 import logging
 import os
 import pandas as pd
@@ -24,11 +23,12 @@ def go(args):
     # Use download(root=...) instead of .file() to avoid Windows path issues
     # caused by the colon in artifact names like "sample.csv:latest".
     logger.info("Downloading artifact %s", args.input_artifact)
-    artifact_dir = run.use_artifact(args.input_artifact).download(
-        root=os.path.join(".", "artifacts", "input")
-    )
-    csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))
-    artifact_local_path = csv_files[0]
+    artifact = run.use_artifact(args.input_artifact)
+    artifact_dir = artifact.download(root=os.path.join(".", "artifacts", "input"))
+    # Use the artifact manifest to get exactly the file that belongs to this
+    # artifact version, instead of glob which would pick up stale files from
+    # previous runs stored in the same directory.
+    artifact_local_path = os.path.join(artifact_dir, list(artifact.manifest.entries)[0])
 
     df = pd.read_csv(artifact_local_path)
 
@@ -41,6 +41,10 @@ def go(args):
         "Filtering price between %.2f and %.2f", args.min_price, args.max_price
     )
     df = df[df["price"].between(args.min_price, args.max_price)]
+
+    # Filter rows outside NYC geographic boundaries
+    # idx = df['longitude'].between(-74.25, -73.50) & df['latitude'].between(40.5, 41.2)
+    # df = df[idx].copy()
 
     # Convert last_review to datetime
     df["last_review"] = pd.to_datetime(df["last_review"])

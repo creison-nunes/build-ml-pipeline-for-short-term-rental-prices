@@ -14,12 +14,20 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(scope='session')
-def data(request):
-    run = wandb.init(job_type="data_tests", resume=True)
+def wandb_run(request):
+    """Single W&B run shared across the entire test session. Created fresh each time (no resume)."""
+    run = wandb.init(job_type="data_tests")
+    yield run
+    # Propagate pytest exit code so wandb marks the run as Failed when tests fail
+    exit_code = 1 if request.session.testsfailed else 0
+    run.finish(exit_code=exit_code)
 
+
+@pytest.fixture(scope='session')
+def data(request, wandb_run):
     # Use download() instead of file() to avoid Windows path issues caused
     # by colons in artifact names (e.g. "clean_sample.csv:latest").
-    artifact_dir = run.use_artifact(request.config.option.csv).download(
+    artifact_dir = wandb_run.use_artifact(request.config.option.csv).download(
         root=os.path.join(".", "artifacts", "csv_data")
     )
     csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))
@@ -33,12 +41,10 @@ def data(request):
 
 
 @pytest.fixture(scope='session')
-def ref_data(request):
-    run = wandb.init(job_type="data_tests", resume=True)
-
+def ref_data(request, wandb_run):
     # Use download() instead of file() to avoid Windows path issues caused
     # by colons in artifact names (e.g. "clean_sample.csv:reference").
-    artifact_dir = run.use_artifact(request.config.option.ref).download(
+    artifact_dir = wandb_run.use_artifact(request.config.option.ref).download(
         root=os.path.join(".", "artifacts", "ref_data")
     )
     csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))

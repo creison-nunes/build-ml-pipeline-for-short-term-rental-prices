@@ -1,3 +1,5 @@
+import glob
+import os
 import pytest
 import pandas as pd
 import wandb
@@ -15,14 +17,17 @@ def pytest_addoption(parser):
 def data(request):
     run = wandb.init(job_type="data_tests", resume=True)
 
-    # Download input artifact. This will also note that this script is using this
-    # particular version of the artifact
-    data_path = run.use_artifact(request.config.option.csv).file()
+    # Use download() instead of file() to avoid Windows path issues caused
+    # by colons in artifact names (e.g. "clean_sample.csv:latest").
+    artifact_dir = run.use_artifact(request.config.option.csv).download(
+        root=os.path.join(".", "artifacts", "csv_data")
+    )
+    csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))
 
-    if data_path is None:
+    if not csv_files:
         pytest.fail("You must provide the --csv option on the command line")
 
-    df = pd.read_csv(data_path)
+    df = pd.read_csv(csv_files[0])
 
     return df
 
@@ -31,14 +36,17 @@ def data(request):
 def ref_data(request):
     run = wandb.init(job_type="data_tests", resume=True)
 
-    # Download input artifact. This will also note that this script is using this
-    # particular version of the artifact
-    data_path = run.use_artifact(request.config.option.ref).file()
+    # Use download() instead of file() to avoid Windows path issues caused
+    # by colons in artifact names (e.g. "clean_sample.csv:reference").
+    artifact_dir = run.use_artifact(request.config.option.ref).download(
+        root=os.path.join(".", "artifacts", "ref_data")
+    )
+    csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))
 
-    if data_path is None:
+    if not csv_files:
         pytest.fail("You must provide the --ref option on the command line")
 
-    df = pd.read_csv(data_path)
+    df = pd.read_csv(csv_files[0])
 
     return df
 

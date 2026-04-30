@@ -3,7 +3,9 @@
 This step takes the best model, tagged with the "prod" tag, and tests it against the test dataset
 """
 import argparse
+import glob
 import logging
+import os
 import wandb
 import mlflow
 import pandas as pd
@@ -26,8 +28,13 @@ def go(args):
     # particular version of the artifact
     model_local_path = run.use_artifact(args.mlflow_model).download()
 
-    # Download test dataset
-    test_dataset_path = run.use_artifact(args.test_dataset).file()
+    # Download test dataset — use download() instead of .file() to avoid
+    # Windows path errors caused by colons in artifact names like "test_data.csv:latest"
+    test_artifact_dir = run.use_artifact(args.test_dataset).download(
+        root=os.path.join(".", "artifacts", "test_data")
+    )
+    csv_files = glob.glob(os.path.join(test_artifact_dir, "*.csv"))
+    test_dataset_path = csv_files[0]
 
     # Read test dataset
     X_test = pd.read_csv(test_dataset_path)

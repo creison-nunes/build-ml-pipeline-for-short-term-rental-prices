@@ -3,7 +3,9 @@
 This script splits the provided dataframe in test and remainder
 """
 import argparse
+import glob
 import logging
+import os
 import pandas as pd
 import wandb
 import tempfile
@@ -22,7 +24,11 @@ def go(args):
     # Download input artifact. This will also note that this script is using this
     # particular version of the artifact
     logger.info(f"Fetching artifact {args.input}")
-    artifact_local_path = run.use_artifact(args.input).file()
+    artifact_dir = run.use_artifact(args.input).download(
+        root=os.path.join(".", "artifacts", "input_split")
+    )
+    csv_files = glob.glob(os.path.join(artifact_dir, "*.csv"))
+    artifact_local_path = csv_files[0]
 
     df = pd.read_csv(artifact_local_path)
 
@@ -37,17 +43,22 @@ def go(args):
     # Save to output files
     for df, k in zip([trainval, test], ['trainval', 'test']):
         logger.info(f"Uploading {k}_data.csv dataset")
-        with tempfile.NamedTemporaryFile("w") as fp:
+        # NamedTemporaryFile with delete=False is required on Windows — the default
+        # exclusive lock prevents pandas from reopening the file by name.
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as fp:
+            tmp_name = fp.name
 
-            df.to_csv(fp.name, index=False)
-
+        try:
+            df.to_csv(tmp_name, index=False)
             log_artifact(
                 f"{k}_data.csv",
                 f"{k}_data",
                 f"{k} split of dataset",
-                fp.name,
+                tmp_name,
                 run,
             )
+        finally:
+            os.remove(tmp_name)
 
 
 if __name__ == "__main__":
